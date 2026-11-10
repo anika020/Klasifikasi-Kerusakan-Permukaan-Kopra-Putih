@@ -49,7 +49,7 @@ PESAN_OBJEK = (
 )
 PESAN_IDLE = "Pesan penolakan akan muncul di sini jika objek bukan kopra putih."
 
-_LOCK = threading.Lock()       # interpreter TFLite tidak aman dipakai bersamaan
+_LOCK = threading.Lock()       # interpreter TFLite dan CLIP tidak dipakai bersamaan
 
 # Khusus HP: tombol kamera membuka aplikasi kamera bawaan HP (kamera belakang),
 # sehingga rasio 4:3, fokus, dan ganti depan/belakang diatur di aplikasi kamera HP.
@@ -180,6 +180,53 @@ def putuskan(probs: np.ndarray) -> dict:
     status = "ok" if conf >= BATAS_YAKIN else "objek"
     return {"status": status, "kelas": labels[k], "conf": conf,
             "probs": probs, "labels": labels}
+
+
+# ============================================================
+# PENYARING MASUKAN (CLIP zero-shot), terpisah dari model klasifikasi
+# ============================================================
+CLIP_NAMA = "openai/clip-vit-base-patch32"
+BATAS_KOPRA = 0.50   # total peluang kelompok "kopra" di bawah ini = ditolak
+
+# Kelompok kopra memuat semua kondisi (termasuk berjamur/busuk) supaya kopra rusak tidak ikut ditolak
+DESKRIPSI_KOPRA = [
+    "a photo of copra, dried coconut meat",
+    "a photo of white copra pieces",
+    "a photo of moldy copra",
+    "a photo of discolored dried coconut meat",
+    "a photo of rotten slimy copra",
+]
+DESKRIPSI_BUKAN = [
+    "a photo of a human face", "a selfie of a person", "a photo of two people",
+    "a photo of clothes", "a photo of a white shirt", "a photo of a bed",
+    "a photo of a mattress", "a photo of laundry hanging", "a photo of a room",
+    "a photo of palm oil fruit", "a photo of fruit", "a photo of rice",
+    "a photo of flour", "a photo of paper", "a photo of a wall",
+    "a photo of a hand", "a photo of food", "a photo of an animal",
+    "a photo of a plant", "a photo of a table", "a photo of the ground",
+]
+
+
+@st.cache_resource(show_spinner="Memuat penyaring masukan...")
+def muat_clip():
+    import torch
+    from transformers import CLIPModel, CLIPProcessor
+    model = CLIPModel.from_pretrained(CLIP_NAMA).eval()
+    proc = CLIPProcessor.from_pretrained(CLIP_NAMA)
+    return model, proc, torch
+
+
+def peluang_kopra(img: Image.Image) -> float:
+    model, proc, torch = muat_clip()
+    teks = DESKRIPSI_KOPRA + DESKRIPSI_BUKAN
+    with _LOCK, torch.no_grad():
+        x = proc(text=teks, images=img.convert("RGB"), return_tensors="pt", padding=True)
+        p = model(**x).logits_per_image.softmax(dim=-1)[0]
+    return float(p[: len(DESKRIPSI_KOPRA)].sum())
+
+
+def lolos_penyaring(img: Image.Image) -> bool:
+    return peluang_kopra(img) >= BATAS_KOPRA
 
 
 # ============================================================
@@ -323,12 +370,19 @@ def main():
             st.session_state["hasil"] = None
         if klik and citra_model is not None:
             with st.spinner("Mengklasifikasikan..."):
-                st.session_state["hasil"] = prediksi(citra_model)
+                # tahap 1: penyaring masukan (CLIP), tahap 2: model klasifikasi 4 kelas
+                if lolos_penyaring(citra_tampil):
+                    st.session_state["hasil"] = prediksi(citra_model)
+                else:
+                    st.session_state["hasil"] = "TOLAK"
 
     # ---------------- KANAN: hasil ----------------
     with kanan:
         probs = st.session_state.get("hasil")
-        v = putuskan(probs) if probs is not None else None
+        if isinstance(probs, str):          # ditolak penyaring masukan
+            v = {"status": "objek"}
+        else:
+            v = putuskan(probs) if probs is not None else None
         st.markdown(html_hasil(v), unsafe_allow_html=True)
 
     st.markdown('<div class="foot">Aplikasi ini hanya untuk kopra putih. Hasil klasifikasi '
