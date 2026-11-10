@@ -204,6 +204,12 @@ DESKRIPSI_BUKAN = [
     "a photo of flour", "a photo of paper", "a photo of a wall",
     "a photo of a hand", "a photo of food", "a photo of an animal",
     "a photo of a plant", "a photo of a table", "a photo of the ground",
+    # kelapa utuh dan bagian-bagiannya yang bukan kopra
+    "a photo of a whole coconut", "a photo of a coconut with brown shell",
+    "a photo of a hairy brown coconut", "a photo of coconut shell",
+    "a photo of a fresh coconut", "a photo of a coconut husk",
+    "a photo of a young green coconut", "a photo of a coconut cut in half",
+    "a photo of fresh white coconut flesh", "a photo of grated coconut",
 ]
 
 
