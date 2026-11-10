@@ -2,3 +2,6 @@ streamlit>=1.35
 ai-edge-litert
 numpy
 pillow
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+transformers
