@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image, ImageOps
 
 # ============================================================
@@ -56,6 +57,61 @@ PESAN_RAGU = (
 PESAN_IDLE = "Pesan penolakan akan muncul di sini jika objek bukan kopra putih."
 
 _LOCK = threading.Lock()       # interpreter TFLite tidak aman dipakai bersamaan
+
+# Skrip kamera: arahkan kamera ke belakang bila ada (HP), otomatis webcam bila tidak ada (laptop),
+# dan sediakan tombol "Balik Kamera" untuk pindah depan/belakang.
+SKRIP_KAMERA = """
+<script>
+(function () {
+  const P = window.parent;
+  if (P.__kameraAktif) return;
+  P.__kameraAktif = true;
+  P.__facing = 'environment';
+
+  // 1) Minta kamera belakang sebagai pilihan utama (ideal = boleh jatuh ke webcam laptop)
+  const md = P.navigator.mediaDevices;
+  if (!md || !md.getUserMedia) return;
+  const asli = md.getUserMedia.bind(md);
+  md.getUserMedia = function (c) {
+    if (c && c.video) {
+      const v = (c.video === true) ? {} : Object.assign({}, c.video);
+      v.facingMode = { ideal: P.__facing };
+      c = Object.assign({}, c, { video: v });
+    }
+    return asli(c);
+  };
+
+  // 2) Tombol Balik Kamera, muncul hanya saat kamera sedang aktif
+  const ID = '__tombol_balik_kamera';
+  const cek = function () {
+    const d = P.document;
+    const vid = d.querySelector('video');
+    let b = d.getElementById(ID);
+    if (!vid) { if (b) b.remove(); return; }
+    if (b) return;
+    b = d.createElement('button');
+    b.id = ID;
+    b.type = 'button';
+    b.textContent = '🔄 Balik Kamera';
+    b.style.cssText = 'display:block;margin:8px auto;padding:8px 16px;border:0;' +
+                      'border-radius:8px;background:#2e7d32;color:#fff;font-size:15px;cursor:pointer;';
+    b.onclick = async function () {
+      P.__facing = (P.__facing === 'environment') ? 'user' : 'environment';
+      const v = d.querySelector('video');
+      if (!v) return;
+      try {
+        const baru = await md.getUserMedia({ video: true });
+        const lama = v.srcObject;
+        v.srcObject = baru;
+        if (lama) lama.getTracks().forEach(function (t) { t.stop(); });
+      } catch (e) { /* perangkat hanya punya satu kamera */ }
+    };
+    vid.parentElement.insertAdjacentElement('afterend', b);
+  };
+  new MutationObserver(cek).observe(P.document.body, { childList: true, subtree: true });
+})();
+</script>
+"""
 
 
 # ============================================================
@@ -258,6 +314,19 @@ def main():
                        layout="wide", initial_sidebar_state="collapsed")
     if CSS_PATH.exists():
         st.markdown(f"<style>{CSS_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+
+    # ---- perapian tampilan HP (hanya aktif di layar kecil) ----
+    st.markdown("""
+    <style>
+    @media (max-width: 640px) {
+      .block-container {padding: 1rem 0.8rem 2rem 0.8rem !important;}
+      .hero h1 {font-size: 1.4rem !important;}
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ---- skrip kamera belakang + tombol balik kamera (dipasang sekali, tidak terlihat) ----
+    components.html(SKRIP_KAMERA, height=0)
 
     # ---- cek berkas wajib ----
     hilang = [p.name for p in (MODEL_PATH, LABELS_PATH) if not p.exists()]
