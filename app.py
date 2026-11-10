@@ -24,14 +24,11 @@ from PIL import Image, ImageOps
 BASE_DIR = Path(__file__).parent
 MODEL_PATH = BASE_DIR / "model" / "model_app.tflite"
 LABELS_PATH = BASE_DIR / "model" / "labels.json"
-OOD_PATH = BASE_DIR / "model" / "ood_stats.npz"
 CSS_PATH = BASE_DIR / "assets" / "style.css"
 SAMPLE_PATH = BASE_DIR / "assets" / "contoh_kopra.jpg"
 
 IMG_SIZE = (224, 224)          # sama dengan training
-MIN_CONF = 0.50                # keyakinan minimum (ada statistik penolakan)
-MIN_CONF_TANPA_OOD = 0.80      # keyakinan minimum bila ood_stats.npz tidak ada
-FAKTOR_KETEGASAN = {"Longgar": 1.25, "Normal": 1.00, "Ketat": 0.85}
+BATAS_YAKIN = 0.50             # keyakinan tertinggi di bawah ini = dianggap bukan kopra putih
 
 TAB_GALERI = "Upload dari Galeri"
 TAB_KAMERA = "Foto dengan Kamera"
@@ -49,10 +46,6 @@ PESAN_OBJEK = (
     "Objek tidak dikenali sebagai kopra putih. Aplikasi ini hanya dirancang untuk "
     "mengklasifikasikan permukaan kopra putih, sehingga objek lain tidak dapat diproses. "
     "Silakan unggah atau ambil citra kopra putih."
-)
-PESAN_RAGU = (
-    "Citra belum dapat diklasifikasikan dengan yakin (keyakinan {conf}, di bawah batas {batas}). "
-    "Pastikan permukaan kopra putih terlihat jelas, cahaya cukup, dan citra tidak buram, lalu coba lagi."
 )
 PESAN_IDLE = "Pesan penolakan akan muncul di sini jika objek bukan kopra putih."
 
@@ -153,26 +146,13 @@ def muat_model():
     interp = _kelas_interpreter()(model_path=str(MODEL_PATH))
     interp.allocate_tensors()
     inp = interp.get_input_details()[0]
-    idx_prob = idx_feat = None
+    idx_prob = None
     for o in interp.get_output_details():
-        dim = int(o["shape"][-1])
-        if dim == len(labels):
+        if int(o["shape"][-1]) == len(labels):
             idx_prob = o["index"]
-        elif dim > 100:
-            idx_feat = o["index"]
     if idx_prob is None:
         raise RuntimeError("Keluaran probabilitas tidak ditemukan pada model TFLite.")
-
-    ood = None
-    if OOD_PATH.exists() and idx_feat is not None:
-        z = np.load(OOD_PATH)
-        ood = {
-            "means": z["means"].astype(np.float64),
-            "precision": z["precision"].astype(np.float64),
-            "thr": float(z["thr"]),
-        }
-    return {"interp": interp, "inp": inp, "idx_prob": idx_prob, "idx_feat": idx_feat,
-            "labels": labels, "ood": ood}
+    return {"interp": interp, "inp": inp, "idx_prob": idx_prob, "labels": labels}
 
 
 def praproses(img: Image.Image) -> np.ndarray:
@@ -182,46 +162,24 @@ def praproses(img: Image.Image) -> np.ndarray:
     return (np.asarray(img, dtype=np.float32) / 255.0)[None, ...]
 
 
-def prediksi(img: Image.Image) -> dict:
+def prediksi(img: Image.Image) -> np.ndarray:
     M = muat_model()
     x = praproses(img)
     with _LOCK:
         M["interp"].set_tensor(M["inp"]["index"], x)
         M["interp"].invoke()
         probs = M["interp"].get_tensor(M["idx_prob"])[0].astype(np.float64)
-        feat = None
-        if M["idx_feat"] is not None:
-            feat = M["interp"].get_tensor(M["idx_feat"])[0].astype(np.float64)
-
-    jarak = None
-    if M["ood"] is not None and feat is not None:
-        diff = feat[None, :] - M["ood"]["means"]
-        m2 = np.einsum("kd,de,ke->k", diff, M["ood"]["precision"], diff)
-        jarak = float(np.sqrt(max(m2.min(), 0.0)))
-    return {"probs": probs, "jarak": jarak}
+    return probs
 
 
-def putuskan(hasil: dict, ketegasan: str) -> dict:
-    """Terapkan batasan: hanya kopra putih yang boleh diklasifikasikan."""
-    M = muat_model()
-    labels = M["labels"]
-    probs = hasil["probs"]
+def putuskan(probs: np.ndarray) -> dict:
+    """Kelas dengan keyakinan tertinggi. Di bawah BATAS_YAKIN = bukan kopra putih."""
+    labels = muat_model()["labels"]
     k = int(np.argmax(probs))
     conf = float(probs[k])
-    ood = M["ood"]
-
-    ambang = ood["thr"] * FAKTOR_KETEGASAN[ketegasan] if ood else None
-    batas_conf = MIN_CONF if ood else MIN_CONF_TANPA_OOD
-
-    if ood is not None and hasil["jarak"] is not None and hasil["jarak"] > ambang:
-        status = "objek"
-    elif conf < batas_conf:
-        status = "ragu"
-    else:
-        status = "ok"
-    return {"status": status, "kelas": labels[k], "conf": conf, "probs": probs,
-            "labels": labels, "jarak": hasil["jarak"], "ambang": ambang,
-            "batas_conf": batas_conf}
+    status = "ok" if conf >= BATAS_YAKIN else "objek"
+    return {"status": status, "kelas": labels[k], "conf": conf,
+            "probs": probs, "labels": labels}
 
 
 # ============================================================
@@ -246,22 +204,16 @@ def html_hasil(v: dict | None) -> str:
     if v is None:
         kelas_txt, kelas_cls, conf = "-", "", 0.0
         probs_map, pesan_html = {}, f'<div class="reject idle">{PESAN_IDLE}</div>'
-    else:
+    elif v["status"] == "ok":
         probs_map = {norm(l): float(p) for l, p in zip(v["labels"], v["probs"])}
-        if v["status"] == "ok":
-            kelas_txt = NAMA_TAMPIL.get(norm(v["kelas"]), v["kelas"])
-            kelas_cls, conf = "k-" + slug(v["kelas"]), v["conf"]
-            pesan_html = f'<div class="reject idle">{PESAN_IDLE}</div>'
-        elif v["status"] == "objek":
-            kelas_txt, kelas_cls, conf = "-", "", 0.0
-            probs_map = {}
-            pesan_html = (f'<div class="reject on"><div class="reject-ic">⚠️</div>'
-                          f'<div><b>Bukan kopra putih</b><br>{esc(PESAN_OBJEK)}</div></div>')
-        else:  # ragu
-            kelas_txt, kelas_cls, conf = "-", "", v["conf"]
-            pesan = PESAN_RAGU.format(conf=persen(v["conf"]), batas=persen(v["batas_conf"], 0))
-            pesan_html = (f'<div class="reject on warn"><div class="reject-ic">🔎</div>'
-                          f'<div><b>Keyakinan rendah</b><br>{esc(pesan)}</div></div>')
+        kelas_txt = NAMA_TAMPIL.get(norm(v["kelas"]), v["kelas"])
+        kelas_cls, conf = "k-" + slug(v["kelas"]), v["conf"]
+        pesan_html = f'<div class="reject idle">{PESAN_IDLE}</div>'
+    else:  # objek bukan kopra putih
+        kelas_txt, kelas_cls, conf = "-", "", 0.0
+        probs_map = {}
+        pesan_html = (f'<div class="reject on"><div class="reject-ic">⚠️</div>'
+                      f'<div><b>Bukan kopra putih</b><br>{esc(PESAN_OBJEK)}</div></div>')
 
     baris = []
     urut = list(URUTAN_TAMPIL)
@@ -317,17 +269,7 @@ def main():
         st.error("Berkas model belum ada di folder `model/`: " + ", ".join(hilang) +
                  ". Jalankan SEL 21 di Colab lalu salin hasilnya ke folder `model/`.")
         st.stop()
-    M = muat_model()
-
-    # ---- sidebar: pengaturan penolakan ----
-    with st.sidebar:
-        st.markdown("### Pengaturan")
-        ketegasan = st.radio("Ketegasan penolakan objek non-kopra",
-                             list(FAKTOR_KETEGASAN), index=1,
-                             help="Ketat: lebih mudah menolak. Longgar: lebih jarang menolak.")
-        if M["ood"] is None:
-            st.warning("ood_stats.npz tidak ditemukan. Penolakan hanya memakai batas keyakinan "
-                       "sehingga kurang andal untuk objek non-kopra.")
+    muat_model()
 
     # ---- judul ----
     st.markdown(
@@ -385,16 +327,9 @@ def main():
 
     # ---------------- KANAN: hasil ----------------
     with kanan:
-        mentah_hasil = st.session_state.get("hasil")
-        v = putuskan(mentah_hasil, ketegasan) if mentah_hasil is not None else None
+        probs = st.session_state.get("hasil")
+        v = putuskan(probs) if probs is not None else None
         st.markdown(html_hasil(v), unsafe_allow_html=True)
-        if v is not None and v["jarak"] is not None:
-            with st.expander("Detail teknis penolakan"):
-                st.write(f"Jarak fitur ke kelas terdekat: **{v['jarak']:.2f}**")
-                st.write(f"Ambang penolakan ({ketegasan}): **{v['ambang']:.2f}** "
-                         "(jarak di atas ambang = bukan kopra putih)")
-                st.write(f"Keyakinan tertinggi: **{persen(v['conf'])}** "
-                         f"(batas minimum {persen(v['batas_conf'], 0)})")
 
     st.markdown('<div class="foot">Aplikasi ini hanya untuk kopra putih. Hasil klasifikasi '
                 'bersifat pendukung keputusan, bukan pengganti penilaian mutu oleh ahli.</div>',
