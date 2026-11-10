@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #faf6ee;
+  --card: #ffffff;
+  --ink: #2a2118;
+  --muted: #7d6e5f;
+  --line: #eadfce;
+  --brand: #2f6b4f;
+  --brand-dark: #1f4d38;
+  --gold: #c8923a;
+  --track: #efe7d9;
+  --shadow: 0 10px 30px rgba(74, 52, 24, .10);
+}
+
+/* ---------- Dasar ---------- */
+.stApp, .stApp p, .stApp label, .stApp button, .stApp h1, .stApp h2, .stApp h3,
+.stApp li, .stApp input, .stApp textarea, .stMarkdown {
+  font-family: 'Poppins', 'Segoe UI', sans-serif !important;
+}
+.stApp {
+  background:
+    radial-gradient(900px 420px at 8% -8%, #f1e3c6 0%, rgba(241,227,198,0) 60%),
+    radial-gradient(800px 380px at 98% 0%, #dcebd9 0%, rgba(220,235,217,0) 55%),
+    var(--bg);
+  color: var(--ink);
+}
+.block-container { max-width: 1180px; padding-top: 2.2rem; padding-bottom: 3rem; }
+header[data-testid="stHeader"] { background: transparent; }
+footer { visibility: hidden; }
+
+/* ---------- Judul ---------- */
+.hero { text-align: center; margin: 0 0 1.8rem; }
+.hero-badge {
+  display: inline-block; padding: .35rem .95rem; border-radius: 999px;
+  background: #fff; border: 1px solid var(--line); color: var(--brand);
+  font-size: .8rem; font-weight: 600; box-shadow: 0 4px 14px rgba(74,52,24,.06);
+}
+.hero h1 {
+  margin: .8rem 0 .35rem; font-size: 2.15rem; line-height: 1.25; font-weight: 700;
+  color: var(--ink); letter-spacing: -.01em; padding: 0;
+}
+.hero p { margin: 0; color: var(--muted); font-size: .98rem; }
+
+/* ---------- Tab sumber citra (st.radio dibuat seperti tab) ---------- */
+div[data-testid="stRadio"] div[role="radiogroup"] {
+  gap: 0; border-bottom: 2px solid var(--line); margin-bottom: 1rem; flex-wrap: nowrap;
+}
+div[data-testid="stRadio"] label[data-baseweb="radio"] {
+  flex: 1; justify-content: center; margin: 0 !important; padding: .7rem .4rem;
+  border-bottom: 3px solid transparent; margin-bottom: -2px !important;
+  cursor: pointer; transition: all .2s ease;
+}
+div[data-testid="stRadio"] label[data-baseweb="radio"] > div:first-child { display: none; }
+div[data-testid="stRadio"] label[data-baseweb="radio"] p {
+  color: var(--muted); font-weight: 500; font-size: .98rem; text-align: center;
+}
+div[data-testid="stRadio"] label[data-baseweb="radio"]:hover p { color: var(--brand); }
+div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) {
+  border-bottom-color: var(--brand);
+}
+div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) p {
+  color: var(--brand-dark); font-weight: 700;
+}
+
+/* ---------- Uploader dan kamera ---------- */
+[data-testid="stFileUploader"] section {
+  background: #fff; border: 2px dashed #d9c9ad; border-radius: 16px; padding: 1rem 1.2rem;
+  transition: border-color .2s ease, background .2s ease;
+}
+[data-testid="stFileUploader"] section:hover { border-color: var(--brand); background: #f6fbf7; }
+[data-testid="stFileUploader"] button {
+  border-radius: 10px; border: 1px solid var(--brand); color: var(--brand); background: #fff;
+}
+[data-testid="stCameraInput"] { border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
+[data-testid="stCameraInput"] button { border-radius: 10px; }
+
+/* ---------- Kartu pratinjau ---------- */
+.pv-card {
+  position: relative; height: 340px; border-radius: 20px; overflow: hidden;
+  background: #efe5d3; border: 1px solid var(--line); box-shadow: var(--shadow);
+  margin: .2rem 0 1.1rem;
+}
+.pv-card img { width: 100%; height: 100%; display: block; }
+.pv-card.contoh img { object-fit: cover; filter: saturate(.95); }
+.pv-card.pilihan img { object-fit: contain; background: #f4ecdd; }
+.pv-overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; text-align: center; gap: .25rem; padding: 1rem;
+  background: linear-gradient(180deg, rgba(30,22,12,.30) 0%, rgba(30,22,12,.62) 100%);
+  color: #fff;
+}
+.pv-overlay b { font-size: 1.15rem; font-weight: 600; }
+.pv-overlay span { font-size: .85rem; opacity: .92; }
+.pv-icon {
+  width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center;
+  background: rgba(255,255,255,.92); font-size: 1.6rem; margin-bottom: .45rem;
+}
+.pv-tag {
+  position: absolute; left: 14px; top: 14px; padding: .28rem .7rem; border-radius: 999px;
+  background: rgba(255,255,255,.94); color: var(--brand-dark); font-size: .72rem; font-weight: 600;
+}
+
+/* ---------- Tombol ---------- */
+.stButton { display: flex; justify-content: center; }
+.stButton > button {
+  width: 100%; border-radius: 14px; padding: .8rem 1.2rem; font-weight: 600; font-size: 1.02rem;
+  border: none; color: #fff; letter-spacing: .01em;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+  box-shadow: 0 8px 20px rgba(47,107,79,.28); transition: transform .15s ease, box-shadow .15s ease;
+}
+.stButton > button:hover:not(:disabled) {
+  transform: translateY(-2px); box-shadow: 0 12px 26px rgba(47,107,79,.34); color: #fff;
+}
+.stButton > button:active:not(:disabled) { transform: translateY(0); }
+.stButton > button:disabled { background: #d9d2c5; color: #fff; box-shadow: none; cursor: not-allowed; }
+
+/* ---------- Kartu hasil ---------- */
+.res-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+  padding: 1.6rem 1.6rem 1.4rem; box-shadow: var(--shadow);
+}
+.res-title { font-weight: 700; letter-spacing: .08em; font-size: .88rem; color: var(--brand-dark); margin-bottom: .8rem; }
+.res-class {
+  --c: #b9ab96; background: #f6efe2; border: 2px solid var(--c); border-radius: 14px;
+  padding: .95rem 1rem; text-align: center; font-size: 1.05rem; color: var(--muted);
+  transition: all .25s ease;
+}
+.res-class b { color: var(--ink); font-size: 1.25rem; margin-left: .25rem; }
+.res-class[class*="k-"] { background: color-mix(in srgb, var(--c) 12%, #fff); }
+.res-class[class*="k-"] b { color: var(--c); }
+
+.conf-head { display: flex; justify-content: space-between; margin: 1.2rem 0 .4rem; font-size: .92rem; color: var(--muted); }
+.conf-head b { color: var(--ink); }
+.res-sub { margin: 1.3rem 0 .6rem; font-weight: 600; font-size: .95rem; color: var(--ink); }
+
+.bar { height: 11px; background: var(--track); border-radius: 999px; overflow: hidden; }
+.bar.big { height: 14px; }
+.bar .fill {
+  height: 100%; border-radius: 999px; background: var(--c, var(--brand));
+  animation: tumbuh .9s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes tumbuh { from { width: 0; } }
+
+.prob-row { display: grid; grid-template-columns: 130px 1fr 58px; align-items: center; gap: .8rem; margin-bottom: .6rem; }
+.prob-name { font-size: .9rem; color: var(--muted); }
+.prob-val { font-size: .85rem; text-align: right; color: var(--ink); font-weight: 500; }
+.prob-row.top .prob-name { color: var(--ink); font-weight: 600; }
+.prob-row.top .prob-val { font-weight: 700; }
+
+.reject {
+  margin-top: 1.2rem; border-radius: 14px; padding: .9rem 1rem; font-size: .88rem; line-height: 1.5;
+  display: flex; gap: .7rem; align-items: flex-start;
+}
+.reject.idle { border: 2px dashed #d6c8b0; color: var(--muted); justify-content: center; text-align: center; background: #fcfaf5; }
+.reject.on { border: 2px solid #e2a29b; background: #fdf0ee; color: #7a2a21; animation: muncul .35s ease; }
+.reject.on.warn { border-color: #e6c27a; background: #fff6e2; color: #7a5410; }
+.reject-ic { font-size: 1.3rem; line-height: 1.2; }
+@keyframes muncul { from { opacity: 0; transform: translateY(6px); } }
+
+/* ---------- Warna per kelas ---------- */
+.k-baik { --c: #2e7d32; }
+.k-berjamur { --c: #5b7f6a; }
+.k-berubah-warna { --c: #d98b0f; }
+.k-berlendir-busuk { --c: #c0392b; }
+
+/* ---------- Lain-lain ---------- */
+[data-testid="stExpander"] { border: 1px solid var(--line); border-radius: 14px; background: #fff; margin-top: .9rem; }
+[data-testid="stSidebar"] { background: #fffaf0; border-right: 1px solid var(--line); }
+.foot { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 2.2rem; }
+
+@media (max-width: 760px) {
+  .hero h1 { font-size: 1.5rem; }
+  .pv-card { height: 260px; }
+  .prob-row { grid-template-columns: 105px 1fr 52px; gap: .5rem; }
+}
