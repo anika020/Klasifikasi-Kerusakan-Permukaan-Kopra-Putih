@@ -58,59 +58,36 @@ PESAN_IDLE = "Pesan penolakan akan muncul di sini jika objek bukan kopra putih."
 
 _LOCK = threading.Lock()       # interpreter TFLite tidak aman dipakai bersamaan
 
-# Skrip kamera: arahkan kamera ke belakang bila ada (HP), otomatis webcam bila tidak ada (laptop),
-# dan sediakan tombol "Balik Kamera" untuk pindah depan/belakang.
-SKRIP_KAMERA = """
+# Khusus HP: tombol kamera membuka aplikasi kamera bawaan HP (kamera belakang),
+# sehingga rasio 4:3, fokus, dan ganti depan/belakang diatur di aplikasi kamera HP.
+SKRIP_CAPTURE = """
 <script>
 (function () {
-  const P = window.parent;
-  if (P.__kameraAktif) return;
-  P.__kameraAktif = true;
-  P.__facing = 'environment';
-
-  // 1) Minta kamera belakang sebagai pilihan utama (ideal = boleh jatuh ke webcam laptop)
-  const md = P.navigator.mediaDevices;
-  if (!md || !md.getUserMedia) return;
-  const asli = md.getUserMedia.bind(md);
-  md.getUserMedia = function (c) {
-    if (c && c.video) {
-      const v = (c.video === true) ? {} : Object.assign({}, c.video);
-      v.facingMode = { ideal: P.__facing };
-      c = Object.assign({}, c, { video: v });
-    }
-    return asli(c);
+  const d = window.parent.document;
+  const atur = function () {
+    let daftar = d.querySelectorAll('[class*="st-key-uploader_kamera_hp"] input[type=file]');
+    if (!daftar.length) daftar = d.querySelectorAll('input[type=file]');
+    daftar.forEach(function (i) {
+      i.setAttribute('accept', 'image/*');
+      i.setAttribute('capture', 'environment');
+    });
   };
-
-  // 2) Tombol Balik Kamera, muncul hanya saat kamera sedang aktif
-  const ID = '__tombol_balik_kamera';
-  const cek = function () {
-    const d = P.document;
-    const vid = d.querySelector('video');
-    let b = d.getElementById(ID);
-    if (!vid) { if (b) b.remove(); return; }
-    if (b) return;
-    b = d.createElement('button');
-    b.id = ID;
-    b.type = 'button';
-    b.textContent = '🔄 Balik Kamera';
-    b.style.cssText = 'display:block;margin:8px auto;padding:8px 16px;border:0;' +
-                      'border-radius:8px;background:#2e7d32;color:#fff;font-size:15px;cursor:pointer;';
-    b.onclick = async function () {
-      P.__facing = (P.__facing === 'environment') ? 'user' : 'environment';
-      const v = d.querySelector('video');
-      if (!v) return;
-      try {
-        const baru = await md.getUserMedia({ video: true });
-        const lama = v.srcObject;
-        v.srcObject = baru;
-        if (lama) lama.getTracks().forEach(function (t) { t.stop(); });
-      } catch (e) { /* perangkat hanya punya satu kamera */ }
-    };
-    vid.parentElement.insertAdjacentElement('afterend', b);
-  };
-  new MutationObserver(cek).observe(P.document.body, { childList: true, subtree: true });
+  atur();
+  new MutationObserver(atur).observe(d.body, { childList: true, subtree: true });
 })();
 </script>
+"""
+
+# Tampilan tombol kamera di HP (menyembunyikan teks "drag and drop")
+CSS_TOMBOL_HP = """
+<style>
+[class*="st-key-uploader_kamera_hp"] [data-testid="stFileUploaderDropzoneInstructions"] {display: none !important;}
+[class*="st-key-uploader_kamera_hp"] [data-testid="stFileUploaderDropzone"] {justify-content: center;}
+[class*="st-key-uploader_kamera_hp"] [data-testid="stFileUploaderDropzone"] button {font-size: 0 !important;}
+[class*="st-key-uploader_kamera_hp"] [data-testid="stFileUploaderDropzone"] button::after {
+  content: "📷 Buka Kamera"; font-size: 1rem;
+}
+</style>
 """
 
 
@@ -131,6 +108,15 @@ def persen(v: float, desimal: int = 1) -> str:
 
 def esc(s) -> str:
     return html.escape(str(s))
+
+
+def perangkat_hp() -> bool:
+    """True bila aplikasi dibuka dari HP/tablet (dibaca dari User-Agent browser)."""
+    try:
+        ua = st.context.headers.get("User-Agent", "") or ""
+    except Exception:
+        return False
+    return any(k in ua for k in ("Android", "iPhone", "iPad", "iPod", "Mobile"))
 
 
 def ke_data_uri(img: Image.Image, sisi_maks: int = 900, kualitas: int = 85) -> str:
@@ -325,9 +311,6 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # ---- skrip kamera belakang + tombol balik kamera (dipasang sekali, tidak terlihat) ----
-    components.html(SKRIP_KAMERA, height=0)
-
     # ---- cek berkas wajib ----
     hilang = [p.name for p in (MODEL_PATH, LABELS_PATH) if not p.exists()]
     if hilang:
@@ -363,7 +346,15 @@ def main():
         if mode == TAB_GALERI:
             berkas = st.file_uploader("Pilih citra kopra", type=["jpg", "jpeg", "png"],
                                       label_visibility="collapsed")
+        elif perangkat_hp():
+            # HP: buka aplikasi kamera bawaan HP (atur 4:3, depan/belakang di situ)
+            st.markdown(CSS_TOMBOL_HP, unsafe_allow_html=True)
+            st.caption("Kamera HP akan terbuka. Atur rasio 4:3 di aplikasi kamera, lalu ambil foto.")
+            berkas = st.file_uploader("Ambil foto kopra", type=["jpg", "jpeg", "png"],
+                                      label_visibility="collapsed", key="uploader_kamera_hp")
+            components.html(SKRIP_CAPTURE, height=0)
         else:
+            # Laptop: webcam
             berkas = st.camera_input("Ambil foto kopra", label_visibility="collapsed")
 
         citra_model, citra_tampil, kunci = None, None, None
